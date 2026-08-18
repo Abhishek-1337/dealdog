@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { getTracked } from "../api";
-import Sparkline from "../components/Sparkline";
+import PriceChart from "../components/PriceChart";
+import PriceLegend from "../components/PriceLegend";
 import { useToast } from "../components/Toast";
+import { brandColor, formatPrice, shade } from "../lib";
 import { navigate } from "../useRoute";
 import type { TrackedProduct } from "../types";
 
-function formatPrice(price: number | null, currency: string) {
-  if (price == null) return "—";
-  return `${currency === "USD" ? "$" : ""}${price.toFixed(2)}`;
+function coverLabel(item: TrackedProduct): string {
+  return item.attributes.model || item.attributes.chip || item.title || "Product";
 }
 
 export default function TrackedView() {
@@ -24,51 +25,87 @@ export default function TrackedView() {
 
   return (
     <div className="container">
-      <div style={{ margin: "32px 0 24px" }}>
-        <h1 style={{ fontSize: 28, letterSpacing: "-0.03em", margin: "0 0 4px" }}>
-          Tracked products
-        </h1>
-        <p style={{ color: "var(--muted)", margin: 0 }}>
-          Products you're watching, with price history.
-        </p>
+      <div className="page-head">
+        <h1>Saved products</h1>
+        <p>Your tracked items, with price history.</p>
       </div>
 
-      {loading && <div style={{ color: "var(--muted)" }}>Loading…</div>}
+      {loading && <div className="loading-line"><span className="spinner" />Loading…</div>}
 
       {!loading && items.length === 0 && (
-        <div className="card" style={{ color: "var(--muted)" }}>
-          Nothing tracked yet. Search for a product and hit Track.
-        </div>
+        <div className="empty">Nothing saved yet. Search for a product and hit Save.</div>
       )}
 
-      <div style={{ display: "grid", gap: 14 }}>
-        {items.map((item) => (
-          <div
-            key={item.product_id}
-            className="card"
-            style={{ display: "flex", alignItems: "center", gap: 16, cursor: "pointer" }}
-            onClick={() => navigate(`/products/${item.product_id}`)}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {item.title}
-              </div>
-              <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-                {Object.entries(item.attributes).map(([k, v]) => (
-                  <span key={k} className="chip">
-                    <span style={{ color: "var(--muted)", marginRight: 4 }}>{k}</span>
-                    {v}
+      <div className="tracked-grid">
+        {items.map((item) => {
+          const history = item.price_history;
+          const biggestDrop = history.drops[0] ?? null;
+          return (
+            <article
+              key={item.product_id}
+              className="tracked-card"
+              onClick={() => navigate(`/track/${item.product_id}`)}
+            >
+              <div
+                className="pin-cover"
+                style={{
+                  background: `linear-gradient(160deg, ${brandColor(item.attributes.brand ?? "")} 0%, ${shade(brandColor(item.attributes.brand ?? ""), -0.35)} 100%)`,
+                }}
+              >
+                {item.attributes.brand && (
+                  <span className="pin-watermark">{item.attributes.brand}</span>
+                )}
+                <div className="pin-cover-text">
+                  <span className="pin-cover-label">{coverLabel(item)}</span>
+                  <span className="pin-cover-price">
+                    {formatPrice(history.best_price, history.currency)}
                   </span>
-                ))}
+                </div>
               </div>
-            </div>
-            <Sparkline data={item.history.map((h) => h.price)} />
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 12, color: "var(--muted)" }}>best</div>
-              <div style={{ fontWeight: 700 }}>{formatPrice(item.best_price, item.currency)}</div>
-            </div>
-          </div>
-        ))}
+              <div className="pin-body">
+                {Object.keys(item.attributes).length > 0 && (
+                  <div className="pin-chips">
+                    {Object.entries(item.attributes).map(([k, v]) => (
+                      <span key={k} className="chip">
+                        <span>{k}</span>
+                        {v}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {biggestDrop && (
+                  <div className="drop-banner">
+                    <strong>
+                      ↓ {formatPrice(biggestDrop.absolute, history.currency)} on {biggestDrop.site}
+                    </strong>
+                    <span>
+                      {biggestDrop.percent}% under its {formatPrice(biggestDrop.baseline_average, history.currency)} average
+                    </span>
+                  </div>
+                )}
+
+                <div className="card-chart">
+                  <PriceChart history={history} height={72} compact />
+                </div>
+                <PriceLegend history={history} compact />
+
+                <div className="card-stats">
+                  <div>
+                    <small>Best now</small>
+                    {formatPrice(history.best_price, history.currency)}
+                    {history.best_site && <em>{history.best_site}</em>}
+                  </div>
+                  <div>
+                    <small>All-time low</small>
+                    {formatPrice(history.lowest_price, history.currency)}
+                    {history.lowest_site && <em>{history.lowest_site}</em>}
+                  </div>
+                </div>
+              </div>
+            </article>
+          );
+        })}
       </div>
     </div>
   );

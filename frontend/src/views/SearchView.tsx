@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { searchProducts, trackProduct } from "../api";
 import { useToast } from "../components/Toast";
-import { brandColor, formatPrice, shade, siteColor } from "../lib";
+import { brandColor, formatPrice, shade } from "../lib";
+import { siteColor } from "../viz";
 import { navigate } from "../useRoute";
 import type { Group, MatchStatus, SearchResponse } from "../types";
 

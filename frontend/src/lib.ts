@@ -25,19 +25,9 @@ export function shade(hex: string, amount: number): string {
   return `#${f(m[1])}${f(m[2])}${f(m[3])}`;
 }
 
-const SITE_COLORS: Record<string, string> = {
-  amazon: "#FF9900",
-  bestbuy: "#0046BE",
-  walmart: "#0071CE",
-  newegg: "#F60",
-  target: "#CC0000",
-  ebay: "#0064D2",
-};
-
-export function siteColor(site: string): string {
-  const s = (site || "").trim().toLowerCase();
-  if (SITE_COLORS[s]) return SITE_COLORS[s];
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return PALETTE[h % PALETTE.length];
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
+
+// Site identity colors live in viz.ts, so a retailer wears the same hue in the
+// search list and in the price chart — and the palette is validated in one place.

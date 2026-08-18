@@ -1,4 +1,5 @@
 import type {
+  PriceHistory,
   ProductDetail,
   SearchResponse,
   TrackedProduct,
@@ -41,4 +42,15 @@ export async function getTracked(): Promise<TrackedProduct[]> {
 export async function getProduct(id: number): Promise<ProductDetail> {
   const resp = await fetch(`${BASE}/products/${id}`);
   return handle<ProductDetail>(resp);
+}
+
+export async function getPriceHistory(id: number): Promise<PriceHistory> {
+  const resp = await fetch(`${BASE}/products/${id}/history`);
+  return handle<PriceHistory>(resp);
+}
+
+/** Run a scrape round: appends a new observation per site, never overwrites. */
+export async function refreshPrices(id: number): Promise<PriceHistory> {
+  const resp = await fetch(`${BASE}/products/${id}/history`, { method: "POST" });
+  return handle<PriceHistory>(resp);
 }
