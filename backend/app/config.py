@@ -15,6 +15,15 @@ class Settings(BaseSettings):
     pending_low: float = 0.80
     top_k: int = 5
 
+    # Price-drop detection. A site's latest price is compared to the rolling
+    # average of its own previous `drop_window` prices; a drop is only flagged
+    # when it clears BOTH thresholds, so a $0.50 dip on a cheap item and a 0.2%
+    # dip on an expensive one are both ignored.
+    drop_percent_threshold: float = 10.0
+    drop_absolute_threshold: float = 5.0
+    drop_window: int = 3
+    drop_min_history: int = 2
+
 
 @lru_cache
 def get_settings() -> Settings:
