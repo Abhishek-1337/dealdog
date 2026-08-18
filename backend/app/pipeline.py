@@ -24,9 +24,16 @@ def search(query: str, repo, llm, embedder, settings: Settings) -> SearchRespons
     if not listings:
         return SearchResponse(query=query, groups=[])
 
-    attrs_list = llm.extract_attributes_batch([item.title for item in listings])
+    titles = [item.title for item in listings]
+    attrs_list = llm.extract_attributes_batch(titles)
     for listing, attrs in zip(listings, attrs_list, strict=False):
-        listing.attributes = attrs
+        listing.attributes = {k: v for k, v in attrs.items() if k != "group"}
+        listing.group = str(attrs.get("group", "") or "").strip().lower()
+
+    relevant = llm.filter_relevant(query, titles, attrs_list)
+    listings = [item for item, keep in zip(listings, relevant, strict=False) if keep]
+    if not listings:
+        return SearchResponse(query=query, groups=[])
 
     groups = group_listings(listings)
 
@@ -100,3 +107,4 @@ def track(payload, repo, embedder) -> TrackResponse:
         reused_existing=False,
         title=product.title,
     )
+

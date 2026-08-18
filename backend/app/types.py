@@ -20,6 +20,7 @@ class Listing:
     link: str = ""
     identifiers: dict = field(default_factory=dict)
     attributes: dict = field(default_factory=dict)
+    group: str = ""
 
 
 @dataclass

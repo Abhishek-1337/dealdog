@@ -34,6 +34,12 @@ def group_listings(listings: list[Listing]) -> list[Group]:
                 union(i, by_id[sig])
             else:
                 by_id[sig] = i
+        if listing.group:
+            sig = f"group:{listing.group.strip().lower()}"
+            if sig in by_id:
+                union(i, by_id[sig])
+            else:
+                by_id[sig] = i
         key = group_key(listing.attributes)
         if key in by_key:
             union(i, by_key[key])

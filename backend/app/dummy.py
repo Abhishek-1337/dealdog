@@ -1,4 +1,6 @@
 import re
+from collections import Counter
+from math import log
 
 from .types import RawListing
 
@@ -22,18 +24,39 @@ CATALOG: list[RawListing] = [
 ]
 
 
+STOPWORDS = {"the", "a", "an", "with", "and", "for", "of", "in", "on", "at", "to", "by"}
+
+
 def _tokens(text: str) -> set[str]:
-    return set(re.findall(r"[a-z0-9]+", text.lower()))
+    return {t for t in re.findall(r"[a-z0-9]+", text.lower()) if t not in STOPWORDS}
+
+
+_DOC_COUNT = len(CATALOG)
+_DF: Counter = Counter()
+for _item in CATALOG:
+    _DF.update(_tokens(_item.title))
+
+
+def _idf(token: str) -> float:
+    df = _DF.get(token, 0)
+    if df == 0:
+        return 0.0
+    return log((_DOC_COUNT + 1) / df) + 1.0
+
+
+def _score(q_tokens: set[str], item_tokens: set[str]) -> float:
+    return sum(_idf(t) for t in (q_tokens & item_tokens))
 
 
 def search(query: str) -> list[RawListing]:
-    q = _tokens(query)
-    if not q:
+    q_tokens = _tokens(query)
+    if not q_tokens:
         return []
-    scored: list[tuple[int, RawListing]] = []
+    scored: list[tuple[float, RawListing]] = []
     for item in CATALOG:
-        item_tokens = _tokens(item.title)
-        if q <= item_tokens:
-            scored.append((len(q & item_tokens), item))
+        score = _score(q_tokens, _tokens(item.title))
+        if score > 0:
+            scored.append((score, item))
     scored.sort(key=lambda x: (-x[0], x[1].price))
     return [item for _, item in scored]
+

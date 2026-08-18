@@ -1,3 +1,8 @@
+import os
+
+os.environ["DATABASE_URL"] = ""
+os.environ["OPENAI_API_KEY"] = ""
+
 import pytest
 
 from app.config import Settings
