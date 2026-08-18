@@ -41,25 +41,55 @@ class TrackResponse(BaseModel):
 
 class PricePointOut(BaseModel):
     site: str
-    price: float
+    price: float | None
     currency: str
     link: str
     recorded_at: str
+    scrape_success: bool = True
+
+
+class PriceDropOut(BaseModel):
+    site: str
+    current_price: float
+    baseline_average: float
+    percent: float
+    absolute: float
+    recorded_at: str
+
+
+class SiteSeriesOut(BaseModel):
+    """One retailer's own price line, plus its own independent drop verdict."""
+
+    site: str
+    points: list[PricePointOut]
+    latest_price: float | None
+    latest_at: str | None
+    baseline_average: float | None
+    drop: PriceDropOut | None
+
+
+class PriceHistoryOut(BaseModel):
+    product_id: int
+    currency: str
+    sites: list[SiteSeriesOut]
+    best_price: float | None
+    best_site: str | None
+    lowest_price: float | None
+    lowest_site: str | None
+    lowest_at: str | None
+    drops: list[PriceDropOut]
+    records: list[PricePointOut]
 
 
 class TrackedProductOut(BaseModel):
     product_id: int
     title: str
     attributes: dict
-    best_price: float | None
-    currency: str
-    history: list[PricePointOut]
+    price_history: PriceHistoryOut
 
 
 class ProductDetail(BaseModel):
     id: int
     title: str
     attributes: dict
-    best_price: float | None
-    currency: str
-    history: list[PricePointOut]
+    price_history: PriceHistoryOut

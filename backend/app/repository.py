@@ -81,6 +81,7 @@ class SqlProductRepo:
                         price=listing.price,
                         currency=getattr(listing, "currency", "USD"),
                         link=getattr(listing, "link", ""),
+                        scrape_success=getattr(listing, "scrape_success", True),
                     )
                 )
             session.commit()
@@ -101,8 +102,11 @@ class SqlProductRepo:
 
     def get_price_history(self, product_id: int) -> list[PriceRecord]:
         with self._sf() as session:
+            # id breaks ties so rows from one scrape round keep insertion order.
             rows = session.execute(
-                select(PricePoint).where(PricePoint.product_id == product_id).order_by(PricePoint.recorded_at)
+                select(PricePoint)
+                .where(PricePoint.product_id == product_id)
+                .order_by(PricePoint.recorded_at, PricePoint.id)
             ).scalars().all()
             return [
                 PriceRecord(
@@ -111,6 +115,7 @@ class SqlProductRepo:
                     currency=r.currency,
                     link=r.link,
                     recorded_at=r.recorded_at.isoformat(),
+                    scrape_success=r.scrape_success,
                 )
                 for r in rows
             ]
@@ -161,13 +166,14 @@ class InMemoryProductRepo:
 
     def add_price_points(self, product_id: int, listings) -> None:
         for listing in listings:
-            self.history[product_id].append(
+            self.history.setdefault(product_id, []).append(
                 PriceRecord(
                     site=listing.site,
                     price=listing.price,
                     currency=getattr(listing, "currency", "USD"),
                     link=getattr(listing, "link", ""),
                     recorded_at=_now(),
+                    scrape_success=getattr(listing, "scrape_success", True),
                 )
             )
 

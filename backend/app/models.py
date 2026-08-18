@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .config import get_settings
@@ -36,12 +36,24 @@ class TrackedProduct(Base):
 
 
 class PricePoint(Base):
+    """One observation of one site's price. Append-only — rows are never updated.
+
+    A failed scrape is still an observation: ``scrape_success`` is False and
+    ``price`` is NULL, so the gap in a site's series is visible rather than
+    silently backfilled with the last known price.
+    """
+
     __tablename__ = "price_points"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False)
     site: Mapped[str] = mapped_column(String(50), nullable=False)
-    price: Mapped[float] = mapped_column(Float, nullable=False)
+    price: Mapped[float | None] = mapped_column(Float, nullable=True)
     currency: Mapped[str] = mapped_column(String(10), default="USD")
     link: Mapped[str] = mapped_column(Text, default="")
+    scrape_success: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        Index("ix_price_points_product_site_time", "product_id", "site", "recorded_at"),
+    )

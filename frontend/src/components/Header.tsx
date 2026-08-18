@@ -1,32 +1,29 @@
-import { navigate } from "../useRoute";
+import { navigate, useRoute } from "../useRoute";
 
 export default function Header() {
+  const route = useRoute();
+  const active = route.path === "/" ? "search" : "tracked";
+
   return (
-    <header
-      style={{
-        background: "var(--surface)",
-        borderBottom: "1px solid var(--border)",
-        padding: "14px 20px",
-        display: "flex",
-        alignItems: "center",
-        gap: 24,
-        position: "sticky",
-        top: 0,
-        zIndex: 10,
-      }}
-    >
-      <a
-        href="#/"
-        style={{ fontWeight: 800, fontSize: 18, letterSpacing: "-0.02em" }}
-      >
+    <header className="topbar">
+      <a href="#/" className="brand" onClick={() => navigate("/")}>
+        <span className="brand-dot" />
         DealDog
       </a>
-      <nav style={{ display: "flex", gap: 16, fontSize: 14 }}>
-        <a href="#/" onClick={() => navigate("/")} style={{ color: "var(--muted)" }}>
+      <nav className="topbar-nav">
+        <a
+          href="#/"
+          className={active === "search" ? "active" : ""}
+          onClick={() => navigate("/")}
+        >
           Search
         </a>
-        <a href="#/tracked" onClick={() => navigate("/tracked")} style={{ color: "var(--muted)" }}>
-          Tracked
+        <a
+          href="#/tracked"
+          className={active === "tracked" ? "active" : ""}
+          onClick={() => navigate("/tracked")}
+        >
+          Saved
         </a>
       </nav>
     </header>

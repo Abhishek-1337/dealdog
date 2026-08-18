@@ -11,7 +11,7 @@ export default function App() {
   let view;
   if (route.path === "/tracked") {
     view = <TrackedView />;
-  } else if (route.path === "/products" && route.parts[1]) {
+  } else if (route.path === "/track" && route.parts[1]) {
     view = <ProductDetailView id={Number(route.parts[1])} />;
   } else {
     view = <SearchView />;

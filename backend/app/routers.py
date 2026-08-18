@@ -1,9 +1,11 @@
+from dataclasses import asdict
+
 from fastapi import APIRouter, Depends, HTTPException
 
-from . import pipeline
+from . import history, pipeline
 from .deps import AppContext, get_context
 from .schemas import (
-    PricePointOut,
+    PriceHistoryOut,
     ProductDetail,
     SearchResponse,
     TrackedProductOut,
@@ -14,14 +16,9 @@ from .schemas import (
 router = APIRouter(prefix="/api")
 
 
-def _history_out(history):
-    return [PricePointOut(**h.__dict__) for h in history]
-
-
-def _best_price(history):
-    if not history:
-        return None, "USD"
-    return min(h.price for h in history), history[0].currency
+def _history_out(ctx: AppContext, product_id: int) -> PriceHistoryOut:
+    records = ctx.repo.get_price_history(product_id)
+    return PriceHistoryOut(**asdict(history.build_history(product_id, records, ctx.settings)))
 
 
 @router.get("/health")
@@ -44,21 +41,15 @@ def track(payload: TrackRequest, ctx: AppContext = Depends(get_context)):
 
 @router.get("/tracked", response_model=list[TrackedProductOut])
 def tracked(ctx: AppContext = Depends(get_context)):
-    out = []
-    for _tracked, product in ctx.repo.get_tracked():
-        history = ctx.repo.get_price_history(product.id)
-        best, currency = _best_price(history)
-        out.append(
-            TrackedProductOut(
-                product_id=product.id,
-                title=product.title,
-                attributes=product.attributes,
-                best_price=best,
-                currency=currency,
-                history=_history_out(history),
-            )
+    return [
+        TrackedProductOut(
+            product_id=product.id,
+            title=product.title,
+            attributes=product.attributes,
+            price_history=_history_out(ctx, product.id),
         )
-    return out
+        for _tracked, product in ctx.repo.get_tracked()
+    ]
 
 
 @router.get("/products/{product_id}", response_model=ProductDetail)
@@ -66,13 +57,27 @@ def product_detail(product_id: int, ctx: AppContext = Depends(get_context)):
     product = ctx.repo.get_product(product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="product not found")
-    history = ctx.repo.get_price_history(product.id)
-    best, currency = _best_price(history)
     return ProductDetail(
         id=product.id,
         title=product.title,
         attributes=product.attributes,
-        best_price=best,
-        currency=currency,
-        history=_history_out(history),
+        price_history=_history_out(ctx, product.id),
     )
+
+
+@router.get("/products/{product_id}/history", response_model=PriceHistoryOut)
+def product_history(product_id: int, ctx: AppContext = Depends(get_context)):
+    """Per-site price series for the trend graph, plus best/lowest price and drops."""
+    if ctx.repo.get_product(product_id) is None:
+        raise HTTPException(status_code=404, detail="product not found")
+    return _history_out(ctx, product_id)
+
+
+@router.post("/products/{product_id}/history", response_model=PriceHistoryOut)
+def refresh_history(product_id: int, ctx: AppContext = Depends(get_context)):
+    """Run a scrape round and append its results, then return the grown history."""
+    try:
+        result = pipeline.record_scrape(product_id, ctx.repo, ctx.settings)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="product not found") from None
+    return PriceHistoryOut(**asdict(result))

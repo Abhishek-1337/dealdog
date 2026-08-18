@@ -1,4 +1,4 @@
-from . import dummy
+from . import dummy, history
 from .attributes import canonical_title
 from .config import Settings
 from .grouping import group_listings
@@ -24,9 +24,16 @@ def search(query: str, repo, llm, embedder, settings: Settings) -> SearchRespons
     if not listings:
         return SearchResponse(query=query, groups=[])
 
-    attrs_list = llm.extract_attributes_batch([item.title for item in listings])
+    titles = [item.title for item in listings]
+    attrs_list = llm.extract_attributes_batch(titles)
     for listing, attrs in zip(listings, attrs_list, strict=False):
-        listing.attributes = attrs
+        listing.attributes = {k: v for k, v in attrs.items() if k != "group"}
+        listing.group = str(attrs.get("group", "") or "").strip().lower()
+
+    relevant = llm.filter_relevant(query, titles, attrs_list)
+    listings = [item for item, keep in zip(listings, relevant, strict=False) if keep]
+    if not listings:
+        return SearchResponse(query=query, groups=[])
 
     groups = group_listings(listings)
 
@@ -100,3 +107,30 @@ def track(payload, repo, embedder) -> TrackResponse:
         reused_existing=False,
         title=product.title,
     )
+
+
+def record_scrape(product_id: int, repo, settings: Settings):
+    """Run one scrape round for a tracked product and append the results.
+
+    Every site the product has ever been seen on is re-quoted, and every quote
+    is written — successes and failures alike. Nothing is overwritten, so calling
+    this repeatedly is how a product's price history grows.
+    """
+    product = repo.get_product(product_id)
+    if product is None:
+        raise KeyError(product_id)
+
+    records = repo.get_price_history(product_id)
+    by_site = history.group_by_site(records)
+    if not by_site:
+        return history.build_history(product_id, records, settings)
+
+    quotes = []
+    for site in sorted(by_site):
+        site_records = by_site[site]
+        link = next((r.link for r in reversed(site_records) if r.link), "")
+        latest = history.latest_successful(site_records)
+        quotes.append(dummy.quote(site, link, latest.price if latest else None, len(site_records)))
+
+    repo.add_price_points(product_id, quotes)
+    return history.build_history(product_id, repo.get_price_history(product_id), settings)

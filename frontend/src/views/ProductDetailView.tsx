@@ -1,17 +1,41 @@
-import { useEffect, useState, type CSSProperties } from "react";
-import { getProduct } from "../api";
-import Sparkline from "../components/Sparkline";
+import { useCallback, useEffect, useState } from "react";
+import { getProduct, refreshPrices } from "../api";
+import PriceChart from "../components/PriceChart";
+import PriceLegend from "../components/PriceLegend";
 import { useToast } from "../components/Toast";
-import type { ProductDetail } from "../types";
+import { formatPrice } from "../lib";
+import { navigate } from "../useRoute";
+import type { PriceHistory, ProductDetail } from "../types";
+import { siteColor } from "../viz";
 
-function formatPrice(price: number | null, currency: string) {
-  if (price == null) return "—";
-  return `${currency === "USD" ? "$" : ""}${price.toFixed(2)}`;
+function DropCallout({ history }: { history: PriceHistory }) {
+  if (history.drops.length === 0) return null;
+  return (
+    <div className="drop-callout">
+      <span className="drop-callout-icon" aria-hidden="true">↓</span>
+      <div>
+        <strong>
+          Price drop{history.drops.length > 1 ? "s" : ""} detected
+        </strong>
+        <ul>
+          {history.drops.map((drop) => (
+            <li key={drop.site}>
+              <span style={{ textTransform: "capitalize", fontWeight: 600 }}>{drop.site}</span> is at{" "}
+              {formatPrice(drop.current_price, history.currency)} — {drop.percent}% (
+              {formatPrice(drop.absolute, history.currency)}) below its recent{" "}
+              {formatPrice(drop.baseline_average, history.currency)} average.
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
 }
 
 export default function ProductDetailView({ id }: { id: number }) {
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -23,82 +47,122 @@ export default function ProductDetailView({ id }: { id: number }) {
       });
   }, [id, toast]);
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const history = await refreshPrices(id);
+      setProduct((prev) => (prev ? { ...prev, price_history: history } : prev));
+      const drop = history.drops[0];
+      toast(drop ? `Prices updated — ${drop.site} is down ${drop.percent}%` : "Prices updated");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [id, toast]);
+
   if (error) {
-    return <div className="container" style={{ color: "var(--red)" }}>Failed to load: {error}</div>;
+    return <div className="container" style={{ color: "var(--red)", paddingTop: 24 }}>Failed to load: {error}</div>;
   }
 
   if (!product) {
-    return <div className="container" style={{ color: "var(--muted)" }}>Loading…</div>;
+    return <div className="container loading-line"><span className="spinner" />Loading…</div>;
   }
+
+  const history = product.price_history;
 
   return (
     <div className="container">
-      <div style={{ margin: "32px 0 24px" }}>
-        <h1 style={{ fontSize: 26, letterSpacing: "-0.03em", margin: "0 0 8px" }}>{product.title}</h1>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {Object.entries(product.attributes).map(([k, v]) => (
-            <span key={k} className="chip">
-              <span style={{ color: "var(--muted)", marginRight: 4 }}>{k}</span>
-              {v}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontSize: 13, color: "var(--muted)" }}>Best price</div>
-            <div style={{ fontSize: 28, fontWeight: 800 }}>
-              {formatPrice(product.best_price, product.currency)}
-            </div>
-          </div>
-          <Sparkline data={product.history.map((h) => h.price)} width={180} height={48} />
-        </div>
-      </div>
-
-      <h2 style={{ fontSize: 16, margin: "0 0 10px" }}>Price history</h2>
-      <div className="card">
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-          <thead>
-            <tr>
-              <th style={th}>Site</th>
-              <th style={th}>Price</th>
-              <th style={th}>Recorded</th>
-              <th style={th}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {product.history.map((h, i) => (
-              <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
-                <td style={td}>{h.site}</td>
-                <td style={td}>{formatPrice(h.price, h.currency)}</td>
-                <td style={{ ...td, color: "var(--muted)" }}>
-                  {new Date(h.recorded_at).toLocaleString()}
-                </td>
-                <td style={td}>
-                  {h.link && (
-                    <a href={h.link} target="_blank" rel="noreferrer" className="btn btn-ghost">
-                      ↗
-                    </a>
-                  )}
-                </td>
-              </tr>
+      <button className="back-link" onClick={() => navigate("/tracked")}>
+        ← Saved
+      </button>
+      <div className="detail-head">
+        <div style={{ minWidth: 0 }}>
+          <span className="section-label">Tracked product</span>
+          <h1>{product.title}</h1>
+          <div className="pin-chips">
+            {Object.entries(product.attributes).map(([k, v]) => (
+              <span key={k} className="chip">
+                <span>{k}</span>
+                {v}
+              </span>
             ))}
-          </tbody>
-        </table>
+          </div>
+        </div>
+        <div className="detail-price">
+          <small>Best price now</small>
+          {formatPrice(history.best_price, history.currency)}
+          {history.best_site && <em>at {history.best_site}</em>}
+        </div>
       </div>
+
+      <DropCallout history={history} />
+
+      <div className="stat-row">
+        <div className="stat-tile">
+          <small>Best price now</small>
+          <span>{formatPrice(history.best_price, history.currency)}</span>
+          <em>cheapest site's latest price</em>
+        </div>
+        <div className="stat-tile">
+          <small>All-time low</small>
+          <span>{formatPrice(history.lowest_price, history.currency)}</span>
+          <em>
+            {history.lowest_site ? `${history.lowest_site}` : "—"}
+            {history.lowest_at && `, ${new Date(history.lowest_at).toLocaleDateString()}`}
+          </em>
+        </div>
+        <div className="stat-tile">
+          <small>Sites tracked</small>
+          <span>{history.sites.length}</span>
+          <em>{history.records.length} observations</em>
+        </div>
+      </div>
+
+      <section className="chart-card">
+        <header className="chart-card-head">
+          <div>
+            <h2>Price trend by store</h2>
+            <p>One line per retailer. Every scrape is appended, never overwritten.</p>
+          </div>
+          <button className="ghost-btn" onClick={onRefresh} disabled={refreshing}>
+            {refreshing ? "Checking…" : "Check prices"}
+          </button>
+        </header>
+        <PriceLegend history={history} />
+        <PriceChart history={history} height={280} />
+      </section>
+
+      <h2 style={{ fontSize: 18, margin: "0 0 12px", fontWeight: 700 }}>Price history</h2>
+      <table className="history-table">
+        <thead>
+          <tr>
+            <th>Store</th>
+            <th>Price</th>
+            <th>Recorded</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[...history.records].reverse().map((h, i) => (
+            <tr key={i} className={h.scrape_success ? undefined : "row-failed"}>
+              <td style={{ fontWeight: 600 }}>
+                <span className="site-dot" style={{ background: siteColor(h.site) }} />
+                <span style={{ textTransform: "capitalize" }}>{h.site}</span>
+              </td>
+              <td style={{ fontWeight: 700 }}>
+                {h.scrape_success ? (
+                  formatPrice(h.price, h.currency)
+                ) : (
+                  <span className="failed-tag">scrape failed</span>
+                )}
+              </td>
+              <td style={{ color: "var(--muted)" }}>
+                {new Date(h.recorded_at).toLocaleString()}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
-
-const th: CSSProperties = {
-  textAlign: "left",
-  padding: "8px 12px",
-  fontWeight: 600,
-  color: "var(--muted)",
-  fontSize: 12,
-  textTransform: "uppercase",
-};
-
-const td: CSSProperties = { padding: "10px 12px" };

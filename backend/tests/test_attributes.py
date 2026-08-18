@@ -1,4 +1,10 @@
-from app.attributes import canonical_title, extract_attributes_fallback, group_key
+from app.attributes import (
+    canonical_title,
+    extract_attributes_fallback,
+    extract_query_constraints,
+    filter_relevant_fallback,
+    group_key,
+)
 
 
 def test_extract_macbook_attributes():
@@ -31,3 +37,17 @@ def test_group_key_normalizes():
 def test_canonical_title():
     attrs = {"brand": "Apple", "model": "MacBook Air", "chip": "M3", "ram": "8GB", "storage": "256GB"}
     assert canonical_title(attrs) == "Apple MacBook Air M3 8GB 256GB"
+
+
+def test_query_constraints_specific_chip():
+    assert extract_query_constraints("macbook m3") == {"chip": "M3"}
+
+
+def test_query_constraints_vague():
+    assert extract_query_constraints("macbook m") == {}
+
+
+def test_filter_relevant_fallback():
+    attrs = [{"chip": "M3"}, {"chip": "M2"}, {"chip": "M3 Pro"}]
+    assert filter_relevant_fallback("macbook m3", attrs) == [True, False, False]
+    assert filter_relevant_fallback("macbook m", attrs) == [True, True, True]
