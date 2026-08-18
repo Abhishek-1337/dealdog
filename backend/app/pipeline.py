@@ -1,4 +1,4 @@
-from . import dummy
+from . import dummy, history
 from .attributes import canonical_title
 from .config import Settings
 from .grouping import group_listings
@@ -108,3 +108,29 @@ def track(payload, repo, embedder) -> TrackResponse:
         title=product.title,
     )
 
+
+def record_scrape(product_id: int, repo, settings: Settings):
+    """Run one scrape round for a tracked product and append the results.
+
+    Every site the product has ever been seen on is re-quoted, and every quote
+    is written — successes and failures alike. Nothing is overwritten, so calling
+    this repeatedly is how a product's price history grows.
+    """
+    product = repo.get_product(product_id)
+    if product is None:
+        raise KeyError(product_id)
+
+    records = repo.get_price_history(product_id)
+    by_site = history.group_by_site(records)
+    if not by_site:
+        return history.build_history(product_id, records, settings)
+
+    quotes = []
+    for site in sorted(by_site):
+        site_records = by_site[site]
+        link = next((r.link for r in reversed(site_records) if r.link), "")
+        latest = history.latest_successful(site_records)
+        quotes.append(dummy.quote(site, link, latest.price if latest else None, len(site_records)))
+
+    repo.add_price_points(product_id, quotes)
+    return history.build_history(product_id, repo.get_price_history(product_id), settings)

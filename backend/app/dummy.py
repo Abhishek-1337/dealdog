@@ -1,8 +1,9 @@
+import hashlib
 import re
 from collections import Counter
 from math import log
 
-from .types import RawListing
+from .types import Quote, RawListing
 
 CATALOG: list[RawListing] = [
     RawListing("amazon", "Apple 2024 MacBook Air 13-inch Laptop with M3 chip, 8GB Memory, 256GB SSD - Space Gray", 1099.0, link="https://amazon.com/dp/xm5a", identifiers={"asin": "A1001"}),
@@ -60,3 +61,26 @@ def search(query: str) -> list[RawListing]:
     scored.sort(key=lambda x: (-x[0], x[1].price))
     return [item for _, item in scored]
 
+
+_BY_LINK = {item.link: item for item in CATALOG if item.link}
+
+
+def quote(site: str, link: str, last_price: float | None, round_index: int) -> Quote:
+    """Simulate re-scraping one site's listing for round `round_index`.
+
+    Stands in for a real scraper until `dummy.py` is replaced. The result is a
+    pure function of (site, link, round) — the same round always yields the same
+    quote, so history built this way is reproducible and testable. Roughly one
+    scrape in seventeen "fails", which exercises the failure-recording path.
+    """
+    digest = int(hashlib.sha256(f"{site}|{link}|{round_index}".encode()).hexdigest()[:12], 16)
+    if digest % 17 == 0:
+        return Quote(site=site, price=None, link=link, scrape_success=False)
+
+    anchor = _BY_LINK[link].price if link in _BY_LINK else last_price
+    if anchor is None:
+        return Quote(site=site, price=None, link=link, scrape_success=False)
+
+    # Wander within -12%..+6% of the catalog anchor, biased low so drops happen.
+    percent = ((digest >> 16) % 1801) / 100.0 - 12.0
+    return Quote(site=site, price=round(anchor * (1 + percent / 100.0), 2), link=link)
