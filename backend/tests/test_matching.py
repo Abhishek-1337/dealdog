@@ -67,3 +67,45 @@ def test_brand_conflict_overrides_similarity():
     repo = FakeRepo([(product(3, brand="samsung"), 0.95)])
     m = resolve_group(group(attrs={"brand": "apple"}), [0.0], repo, settings())
     assert m.status == "new"
+
+
+def test_category_conflict_overrides_similarity():
+    # A phone case and the phone it fits can embed close together once every
+    # category shares one vector space; the stated category must rule it out.
+    case = ProductRecord(
+        id=4, title="t", attributes={"brand": "apple", "category": "phone case"}, identifiers=[]
+    )
+    repo = FakeRepo([(case, 0.96)])
+    m = resolve_group(
+        group(attrs={"brand": "apple", "category": "smartphone"}), [0.0], repo, settings()
+    )
+    assert m.status == "new"
+
+
+def test_item_conflict_overrides_similarity():
+    sleeve = ProductRecord(
+        id=5, title="t", attributes={"brand": "apple", "item": "laptop sleeve"}, identifiers=[]
+    )
+    repo = FakeRepo([(sleeve, 0.97)])
+    m = resolve_group(group(attrs={"brand": "apple", "item": "laptop"}), [0.0], repo, settings())
+    assert m.status == "new"
+
+
+def test_missing_category_is_not_a_conflict():
+    # Silence is not evidence: a listing that never named its category still matches.
+    tracked = ProductRecord(
+        id=6, title="t", attributes={"brand": "apple", "category": "laptop"}, identifiers=[]
+    )
+    repo = FakeRepo([(tracked, 0.95)])
+    m = resolve_group(group(attrs={"brand": "apple"}), [0.0], repo, settings())
+    assert m.status == "matched"
+    assert m.existing_product_id == 6
+
+
+def test_same_category_still_matches():
+    tracked = ProductRecord(
+        id=8, title="t", attributes={"brand": "apple", "category": "laptop"}, identifiers=[]
+    )
+    repo = FakeRepo([(tracked, 0.95)])
+    m = resolve_group(group(attrs={"brand": "apple", "category": "laptop"}), [0.0], repo, settings())
+    assert m.status == "matched"

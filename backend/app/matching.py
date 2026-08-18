@@ -10,10 +10,15 @@ def _shared_identifier_values(listings: list[Listing]) -> set[str]:
     return values
 
 
-def _brand_rule(group_attrs: dict, product_attrs: dict, similarity: float) -> float:
-    gb = str(group_attrs.get("brand", "")).lower()
-    pb = str(product_attrs.get("brand", "")).lower()
-    if gb and pb and gb != pb:
+def _conflict_rule(key: str, group_attrs: dict, product_attrs: dict, similarity: float) -> float:
+    """Veto a match when both sides state `key` and disagree.
+
+    Only a stated disagreement vetoes; a missing value on either side is not
+    evidence, so a listing that never named its brand still matches.
+    """
+    a = str(group_attrs.get(key, "") or "").strip().lower()
+    b = str(product_attrs.get(key, "") or "").strip().lower()
+    if a and b and a != b:
         return 0.0
     return similarity
 
@@ -30,7 +35,12 @@ def resolve_group(group: Group, embedding: list[float], repo, settings: Settings
         return GroupMatch("new", None, None, None, 1.0)
 
     best_product, best_sim = nearest[0]
-    sim = _brand_rule(group.attributes, best_product.attributes, best_sim)
+    # Now that every category shares one embedding space, a phone case and the
+    # phone it fits can sit close together. A stated category or item mismatch
+    # rules the pair out before a near-miss similarity can merge two products.
+    sim = best_sim
+    for key in ("brand", "category", "item"):
+        sim = _conflict_rule(key, group.attributes, best_product.attributes, sim)
 
     if sim >= settings.match_threshold:
         return GroupMatch("matched", best_product.id, None, sim, sim)
