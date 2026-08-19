@@ -1,7 +1,16 @@
 import json
 
-from .attributes import extract_attributes_fallback, filter_relevant_fallback
 from .config import Settings
+
+
+class LLMUnavailable(RuntimeError):
+    """The extraction step could not run.
+
+    Extraction has no regex fallback on purpose: a half-understood title yields
+    wrong groups, wrong matches and a wrong price history, which is worse than
+    an error the caller can see. Raised when the key is missing or the model
+    call fails.
+    """
 
 EXTRACT_PROMPT = """\
 You extract structured attributes from raw retailer product titles, for any kind \
@@ -151,8 +160,14 @@ class LLMClient:
         return self.client is not None
 
     def extract_attributes_batch(self, titles: list[str]) -> list[dict]:
+        """Turn raw retailer titles into flat attribute dicts, in input order.
+
+        This is the only entry point into extraction. Whether the titles came
+        from a scraper or from the dummy catalog makes no difference — both are
+        just strings a shop wrote, and both are read by the model.
+        """
         if not self.client:
-            return [extract_attributes_fallback(t) for t in titles]
+            raise LLMUnavailable("OPENAI_API_KEY is not set; attribute extraction needs it")
         numbered = "\n".join(f"{i}: {t}" for i, t in enumerate(titles))
         try:
             resp = self.client.chat.completions.create(
@@ -171,12 +186,13 @@ class LLMClient:
             if not isinstance(items, list) or len(items) != len(titles):
                 raise ValueError("unexpected llm shape")
             return [_flatten(item) for item in items]
-        except Exception:
-            return [extract_attributes_fallback(t) for t in titles]
+        except Exception as exc:
+            raise LLMUnavailable(f"attribute extraction failed: {exc}") from exc
 
     def filter_relevant(self, query: str, titles: list[str], attrs_list: list[dict]) -> list[bool]:
+        """Which listings answer the query. Fails open — see the except clause."""
         if not self.client:
-            return filter_relevant_fallback(query, attrs_list)
+            raise LLMUnavailable("OPENAI_API_KEY is not set; relevance filtering needs it")
         numbered = "\n".join(
             f"{i}: {t} | attrs={json.dumps(a, sort_keys=True)}"
             for i, (t, a) in enumerate(zip(titles, attrs_list, strict=False))
@@ -196,4 +212,7 @@ class LLMClient:
                 raise ValueError("unexpected llm shape")
             return [bool(x) for x in relevant]
         except Exception:
+            # Unlike extraction, relevance only narrows an already-correct result
+            # set, so a failed call degrades to "show everything" rather than to
+            # a wrong answer.
             return [True] * len(titles)

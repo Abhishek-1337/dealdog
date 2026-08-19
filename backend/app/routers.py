@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from . import history, pipeline
 from .deps import AppContext, get_context
+from .llm import LLMUnavailable
 from .schemas import (
     PriceHistoryOut,
     ProductDetail,
@@ -28,7 +29,10 @@ def health():
 
 @router.get("/search", response_model=SearchResponse)
 def search(q: str, ctx: AppContext = Depends(get_context)):
-    return pipeline.search(q, ctx.repo, ctx.llm, ctx.embedder, ctx.settings)
+    try:
+        return pipeline.search(q, ctx.repo, ctx.llm, ctx.embedder, ctx.settings)
+    except LLMUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/track", response_model=TrackResponse)
