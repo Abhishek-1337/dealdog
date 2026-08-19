@@ -1,0 +1,39 @@
+# DealDog backend, for a single VM. The frontend is deployed separately on
+# Vercel and the database is hosted (Neon), so this file builds and runs exactly
+# one thing: the API container.
+#
+#   docker compose up -d --build
+#   docker compose logs -f api
+#
+# Config comes from backend/.env (same keys as backend/.env.example). That file
+# is gitignored and is never baked into the image.
+
+services:
+  api:
+    build:
+      context: ./backend
+    image: dealdog-api:latest
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    ports:
+      # Loopback only — TLS is terminated by the existing reverse proxy on this
+      # VM, which should forward to 127.0.0.1:8000. If that proxy is itself a
+      # container on another compose project, give both an external network and
+      # let it target `api:8000` instead of publishing this port at all.
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status == 200 else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -6,7 +6,12 @@ import type {
   TrackResponse,
 } from "./types";
 
-const BASE = "/api";
+// The backend's origin, e.g. "https://api.example.com". Empty in development,
+// where the Vite dev proxy forwards /api to localhost:8000 — a Vercel build has
+// no such proxy, so there VITE_API_BASE_URL must name the VM.
+const ORIGIN = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+
+const BASE = `${ORIGIN}/api`;
 
 async function handle<T>(resp: Response): Promise<T> {
   if (!resp.ok) {
