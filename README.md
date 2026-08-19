@@ -97,6 +97,10 @@ Backend origin only — no `/api` suffix, no trailing slash. It must be `https:/
 the page over TLS and the browser blocks plain-http requests from it. Vite inlines the value at
 build time, so changing it needs a redeploy.
 
+The calls are cross-origin, so the backend has to allow this domain back — put it in
+`CORS_ORIGINS` in `backend/.env` and restart the container. Vercel preview deployments get their
+own domains, so include those too if you want previews to work.
+
 ## Configuration
 
 `backend/.env` — see `backend/.env.example` for the full list.
@@ -105,6 +109,7 @@ build time, so changing it needs a redeploy.
 |---|---|
 | `DATABASE_URL` | Neon connection string. Use `postgresql://` or `postgresql+psycopg2://` — the `+psycopg` (v3) driver is not installed |
 | `OPENAI_API_KEY` | Required; `/api/search` returns 503 without it |
+| `CORS_ORIGINS` | Comma-separated browser origins allowed to call the API — set it to your Vercel domain(s) in production. Defaults to `*` |
 | `LLM_MODEL`, `EMBEDDING_MODEL`, `EMBEDDING_DIM` | Model selection |
 | `MATCH_THRESHOLD`, `PENDING_LOW`, `TOP_K` | Match tiers: above `MATCH_THRESHOLD` auto-matches, above `PENDING_LOW` asks the user, below is a new product |
 | `DROP_PERCENT_THRESHOLD`, `DROP_ABSOLUTE_THRESHOLD`, `DROP_WINDOW` | Price-drop detection; a drop must clear both thresholds to be flagged |

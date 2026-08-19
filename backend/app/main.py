@@ -38,9 +38,12 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="DealDog", lifespan=lifespan)
+    # The frontend is deployed on a different origin than the API, so the
+    # allowed origins differ per environment and come from CORS_ORIGINS.
+    origins = get_settings().cors_origin_list
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
