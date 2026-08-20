@@ -98,14 +98,20 @@ def _idf(token: str) -> float:
 def _score(q_tokens: set[str], item_tokens: set[str]) -> float:
     return sum(_idf(t) for t in (q_tokens & item_tokens))
 
+COVERAGE = 0.6
+
 def search(query: str) -> list[RawListing]:
     q_tokens = _tokens(query)
     if not q_tokens:
         return []
+    total = sum(_idf(t) for t in q_tokens)
+    if total == 0.0:
+        return []
+    floor = COVERAGE * total
     scored: list[tuple[float, RawListing]] = []
     for item in CATALOG:
         score = _score(q_tokens, _tokens(item.title))
-        if score > 0:
+        if score >= floor:
             scored.append((score, item))
     scored.sort(key=lambda x: (-x[0], x[1].price))
     return [item for _, item in scored]
